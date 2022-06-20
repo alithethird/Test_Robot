@@ -1,3 +1,5 @@
+""" This is an example code that is included in the pi_gpio module for ROS2
+This example code is modified to work well with Control Hub Test Code """
 import threading
 import time
 import rclpy
@@ -9,49 +11,41 @@ from pi_gpio_interface.action import GPIO as GPIO_Action
 import RPi.GPIO as GPIO
 
 class RaspberryPIGPIO():
-    def __init__(self, pin_id, type):
+    """ This class is used for controlling Raspberry Pi GPIO """
+    def __init__(self, pin_id, pin_type):
         self.pin_id = pin_id
-        self.type = type.rstrip()
+        self.pin_type = pin_type.rstrip()
         GPIO.setwarnings(False)
         #Use Broadcom pin-numbering scheme
-        GPIO.setmode(GPIO.BCM) 
-        if self.type == "in":
+        GPIO.setmode(GPIO.BCM)
+        if self.pin_type == "in":
             GPIO.setup(pin_id, GPIO.IN, pull_up_down=GPIO.PUD_DOWN) #Set pin as input
-            print ("Setting GPIO " + str(self.pin_id) + "-" + self.type)
+            print("Setting GPIO " + str(self.pin_id) + "-" + self.pin_type)
 
-        elif self.type == "out":
+        elif self.pin_type == "out":
             GPIO.setup(pin_id, GPIO.OUT) #Set pin as output
-            print ("Setting GPIO " + str(self.pin_id) + "-" + self.type)
+            print("Setting GPIO " + str(self.pin_id) + "-" + self.pin_type)
 
         time.sleep(0.1)
 
     def set_pin(self, value):
+        """ This function is used to set pins high or low """
         if value == 1:
             GPIO.output(self.pin_id, GPIO.HIGH) #Set pin High-1
         elif value == 0:
             GPIO.output(self.pin_id, GPIO.LOW) #Set pin Low-0
 
-    def read_pins_from_file():
-        f = open("src/pi_gpio/gpio_pins.txt", "r")
-        pin_list = []
-        for x in f:
-            pin_list.append(x)
-        f.close()
-        
-        return pin_list
 
 class GPIOActionServer(Node):
-
+    """ This class is used to handle ROS2 Action server for
+    communication with Control Hub """
     def __init__(self):
         super().__init__('pi_gpio_server')
-              
-        pin_list = RaspberryPIGPIO.read_pins_from_file()
-        
+
         self.pin_dic = {}
-        
-        for pin in pin_list:
-            pin_id, type = pin.split(',')
-            self.pin_dic[pin_id] =  RaspberryPIGPIO(int(pin_id), type)
+
+        self.pin_dic["20"] = RaspberryPIGPIO(20, 'out')
+        self.pin_dic["26"] = RaspberryPIGPIO(26, 'in')
 
         self._goal_handle = None
         self._goal_lock = threading.Lock()
@@ -68,10 +62,13 @@ class GPIOActionServer(Node):
             callback_group=ReentrantCallbackGroup())
 
     def destroy(self):
+        """ This function cleans the node """
         self._action_server.destroy()
         super().destroy_node()
 
     def goal_callback(self, goal_request):
+        """ This callback function is used to create
+        goal responce accept message """
         self.get_logger().info('Received goal request')
         return GoalResponse.ACCEPT
 
@@ -114,14 +111,14 @@ class GPIOActionServer(Node):
         # Publish the feedback
         goal_handle.publish_feedback(feedback_msg)
 
-        # get the pin ide and action type
-        pin_id, action_type = goal_msg.split(',')   
+        # get the pin ide and action pin_type
+        pin_id, action_type = goal_msg.split(',')
 
         if action_type == "high":
             self.pin_dic[pin_id].set_pin(1)
             time.sleep(0.1)
             result.value = 3
-       
+
         elif action_type == "low":
             self.pin_dic[pin_id].set_pin(0)
             time.sleep(0.1)
@@ -142,9 +139,9 @@ def main(args=None):
     rclpy.spin(action_server, executor=executor)
 
     action_server.destroy()
-    
+
     GPIO.cleanup()
-    
+
     rclpy.shutdown()
 
 if __name__ == '__main__':
